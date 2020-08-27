@@ -6,11 +6,9 @@ from django.core.exceptions import ImproperlyConfigured
 from django.core.files.storage import Storage
 from django.utils.deconstruct import deconstructible
 from django.utils.encoding import filepath_to_uri
-from django.conf import settings
 from gridfs import GridFS, NoFile
-from pymongo import MongoClient
 
-
+from . import MONGO_CLIENT, DEFAULT_BASE_URL, DEFAULT_COLLECTION
 __all__ = ('GridFSStorage',)
 
 
@@ -27,12 +25,34 @@ def _get_subcollections(collection):
 
 @deconstructible
 class GridFSStorage(Storage):
-    default_url = 'mongodb://127.0.0.1:27017'
+    """
+    GridFS Storage backend for Django.
+    Based on https://github.com/nesdis/djongo/blob/master/djongo/storage.py
+    This backend aims to add a GridFS storage to upload files to using Django's file fields.
+    For performance, the file hierarchy is represented as a tree of
+    MongoDB sub-collections.
+    (One could use a flat list, but to list a directory '/this/path/'
+    we would have to execute a search over the whole collection and
+    then filter the results to exclude those not starting by
+    '/this/path' using that model.)
+    This backend is a copy of djongo but separated from it for anyone who needs to just use
+    the gridfs storage engine without other dependencies
 
-    def __init__(self, location='', default_url='', collection='storage', base_url='/media/'):
+    :param location:
+       (optional) Name of the top-level node that holds the files. This
+       value of `location` is prepended to all file paths, so it works
+       like the `location` setting for Django's built-in
+       :class:`~django.core.files.storage.FileSystemStorage`.
+    :param collection:
+        Name of the collection the file tree shall be stored in.
+        Defaults to 'storage'.
+    :param base_url:
+        URL that serves the files in GridFS (for instance, through nginx-gridfs or some other magic).
+        Defaults to None
+    """
+    def __init__(self, location='', collection=DEFAULT_COLLECTION, base_url=DEFAULT_BASE_URL):
         self.location = location.strip(os.sep)
         self.collection = collection
-        self.default_url = default_url or getattr(settings, 'GRIDFS_URL', self.default_url)
         self.base_url = base_url
 
         if not self.collection:
@@ -40,9 +60,6 @@ class GridFSStorage(Storage):
 
         if self.base_url and not self.base_url.endswith('/'):
             raise ImproperlyConfigured("If set, 'base_url' must end with a slash.")
-
-    def get_file_name(self, oid):
-        return self.fs.get(ObjectId(oid)).filename
 
     def _open(self, path, mode='rb'):
         """
@@ -117,7 +134,7 @@ class GridFSStorage(Storage):
             # Check if exist a file with that ObjectId
             if not gridfs.exists(file_oid):
                 return None
-        return urljoin(self.base_url, filepath_to_uri(str(file_oid)))
+        return urljoin(self.base_url, filepath_to_uri(str(name)))
 
     def created_time(self, path):
         """
@@ -136,7 +153,7 @@ class GridFSStorage(Storage):
         collection_name = path.replace(os.sep, '.').strip('.')
 
         if not hasattr(self, '_db'):
-            self._db = MongoClient(self.default_url)[self.collection]
+            self._db = MONGO_CLIENT[self.collection]
 
         return GridFS(self._db, collection_name), filename
 
