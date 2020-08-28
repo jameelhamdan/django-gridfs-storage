@@ -1,8 +1,8 @@
-from django.urls import path
+from django.urls import re_path
 from .views import ServeMediaView
 
 
 app_name = 'gridfs_storage'
 urlpatterns = [
-    path('<str:object_id>', ServeMediaView.as_view(), name='media_url')
+    re_path(r'^(?P<file_path>.*)/$', ServeMediaView.as_view(), name='media_url')
 ]

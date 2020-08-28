@@ -81,7 +81,12 @@ class GridFSStorage(Storage):
         Saves `content` into the file at `path`.
         """
         gridfs, filename = self._get_gridfs(path)
-        gridfs.put(content, filename=filename, contentType=content.content_type)
+        kwargs = {}
+
+        if hasattr(content, 'content_type'):
+            kwargs['contentType'] = content.content_type
+
+        gridfs.put(content, filename=filename, **kwargs)
         return path
 
     def delete(self, path):
@@ -123,7 +128,7 @@ class GridFSStorage(Storage):
             raise ValueError("This file is not accessible via a URL.")
         gridfs, filename = self._get_gridfs(name)
         try:
-            file_oid = gridfs.get_last_version(filename=name).__getattr__('_id')
+            file_oid = gridfs.get_last_version(filename=filename).__getattr__('_id')
         except NoFile:
             # In case not found by filename
             try:
@@ -149,7 +154,7 @@ class GridFSStorage(Storage):
         `path`.
         """
         path, filename = os.path.split(path)
-        path = os.path.join(self.collection, self.location, path.strip(os.sep))
+        path = os.path.normpath(os.path.join(self.collection, self.location, path.strip(os.sep)))
         collection_name = path.replace(os.sep, '.').strip('.')
 
         if not hasattr(self, '_db'):

@@ -1,6 +1,7 @@
-from django.http import FileResponse
+from django.http import FileResponse, Http404
 from django.views import View
-from .storages import GridFSStorage
+from gridfs import NoFile
+from .storage import GridFSStorage
 
 
 class ServeMediaView(View):
@@ -12,5 +13,8 @@ class ServeMediaView(View):
     http_method_names = ['get']
 
     def get(self, request, *args, **kwargs):
-        object_id = self.kwargs['object_id']
-        return FileResponse(GridFSStorage()._open(object_id))
+        file_path = self.kwargs['file_path']
+        try:
+            return FileResponse(GridFSStorage()._open(file_path))
+        except NoFile:
+            raise Http404('File does not exist')
